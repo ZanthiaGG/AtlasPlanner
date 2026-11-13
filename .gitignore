@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vite/
+
+# Raw GGG export cached by scripts/fetch-tree.ts — the compact output in
+# public/tree/ is what ships, so the 1.4MB source does not need committing.
+.cache/
