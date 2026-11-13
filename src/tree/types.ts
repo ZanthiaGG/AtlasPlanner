@@ -89,8 +89,6 @@ export interface Tree extends CompactTree {
   byId: Map<number, CompactNode>
   /** Symmetric adjacency, masteries excluded (they are not allocatable). */
   adj: Map<number, number[]>
-  /** Allocatable nodes only — excludes masteries and the start node. */
-  allocatable: CompactNode[]
   countsByMechanic: Map<MechanicId, number>
   /** Deduplicated drawable edges, built once rather than per frame. */
   edges: [a: CompactNode, b: CompactNode][]

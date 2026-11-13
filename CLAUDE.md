@@ -86,6 +86,36 @@ Export prefix: `https://www.pathofexile.com/fullscreen-atlas-skill-tree/`.
 - Sprite sheets load lazily per zoom level; the store falls back to any decoded
   level while a better one is in flight, so zooming never flashes empty.
 
+## UI shape
+
+One sidebar, no accordions. Brand, then a filter bar (search + selected mechanic
+chips + a Mechanics button), then the node list taking all remaining height.
+Everything occasional lives in popovers that stay open until dismissed: the
+mechanic picker from the sidebar, Summary and Plan from the top-right HUD.
+
+This replaced four stacked collapsible panels that fought for height, where
+picking a mechanic closed its own panel — so choosing three meant reopening and
+re-scrolling a 43-chip grid twice. The picker now has its own filter box.
+
+Colour is assigned per *selection*, not per mechanic: 43 fixed hues gave 46 pairs
+under deltaE 14 (two were deltaE 2.9). See `SELECTION_PALETTE`.
+
+## Things that bit us
+
+- **`usePlan` history**: the trim must keep `HISTORY_LIMIT - 1` entries so the
+  append lands on the limit. Keeping `LIMIT` grew the array past a clamped
+  cursor and froze the planner on the 100th edit. `plan.test.ts` guards it.
+- **Costs come from one BFS**, `distancesFrom`, not `pathTo` per node — the list
+  renders hundreds of rows and the per-node version meant ~966 graph searches
+  per render, which showed up as ~100ms hitches whenever the cursor crossed a
+  node. Step costs are in [0.99, 1] and the tree is 21 deep, so hop count always
+  wins and an unweighted BFS gives identical point costs.
+- **Imports must be validated**, not just decoded: character passive trees are
+  also version 6. `tree/import.ts` checks the class byte, drops ids this tree
+  version lacks, and prunes to the component reachable from the start.
+- **GGG icon cells are opaque squares** (corner alpha 255); the client is
+  expected to round them off, so icons are circle-clipped when blitted.
+
 ## Conventions
 
 - Dark graphite, one blue accent (`--accent: #4db5ff`). Mechanic colours are the

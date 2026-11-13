@@ -113,6 +113,17 @@ export function decode(input: string): TreeCode {
     throw new Error(`Unsupported tree code version ${version} — this planner reads version ${TREE_VERSION}.`)
   }
 
+  // Character passive-tree links are version 6 too, and they are easy to confuse
+  // with Atlas ones. They carry a non-zero class or ascendancy; the Atlas tree
+  // always has both at zero. Without this check a character tree imports as a
+  // pile of ids that mean nothing here — the point counter moves and the canvas
+  // stays empty.
+  const classId = bytes[4]!
+  const ascendancy = bytes[5]!
+  if (classId !== 0 || ascendancy !== 0) {
+    throw new Error('That looks like a character passive tree, not an Atlas tree.')
+  }
+
   let o = 6
   const nodeCount = bytes[o++]!
   const nodes: number[] = []
@@ -129,7 +140,11 @@ export function decode(input: string): TreeCode {
   const variants: Record<number, number> = {}
   const effectCount = o < bytes.length ? bytes[o++]! : 0
   for (let i = 0; i < effectCount; i++) {
-    if (o + 3 >= bytes.length) break
+    // Be strict here for the same reason the node list is: silently dropping
+    // half the choices would import a plan that quietly differs from the link.
+    if (o + 3 >= bytes.length) {
+      throw new Error('That code ends mid-way through its list of notable choices.')
+    }
     const effect = (bytes[o++]! << 8) | bytes[o++]!
     const node = (bytes[o++]! << 8) | bytes[o++]!
     variants[node] = effect

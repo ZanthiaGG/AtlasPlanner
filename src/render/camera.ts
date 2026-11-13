@@ -64,10 +64,6 @@ export class Camera {
     return [this.cx - hw, this.cy - hh, this.cx + hw, this.cy + hh]
   }
 
-  snapshot() { return { cx: this.cx, cy: this.cy, scale: this.scale } }
-  restore(s: { cx: number; cy: number; scale: number }) {
-    this.cx = s.cx; this.cy = s.cy; this.scale = clamp(s.scale, MIN_SCALE, MAX_SCALE)
-  }
 }
 
 export function clamp(v: number, lo: number, hi: number) {

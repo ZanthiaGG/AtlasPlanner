@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { Camera } from '../render/camera.ts'
+import { Camera, clamp, MAX_SCALE, MIN_SCALE } from '../render/camera.ts'
 import { SpriteStore } from '../render/sprites.ts'
 import { CORE_SHEETS, draw, hitRadius } from '../render/renderer.ts'
 import type { RenderState } from '../render/renderer.ts'
@@ -20,7 +20,7 @@ export interface TreeCanvasHandle {
 interface Props {
   tree: Tree
   state: Omit<RenderState, 'tree'>
-  onHover: (node: CompactNode | null) => void
+  onHover: (node: CompactNode | null, x: number, y: number) => void
   onPick: (node: CompactNode, mode: 'allocate' | 'deallocate') => void
   handleRef?: (h: TreeCanvasHandle) => void
 }
@@ -34,29 +34,36 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
   const dirtyRef = useRef(true)
   const spritesRef = useRef<SpriteStore | null>(null)
   const gridRef = useRef<HitGrid | null>(null)
-  // Latest props, read by the render loop without re-subscribing it.
   const stateRef = useRef(state)
-  stateRef.current = state
   const treeRef = useRef(tree)
-  treeRef.current = tree
 
   const invalidate = useCallback(() => { dirtyRef.current = true }, [])
 
-  /** The first fit has to wait for a real viewport size, which arrives via the
-   *  ResizeObserver one frame after mount. */
-  const needsFit = useRef(true)
+  // Latest props for the render loop, written in an effect rather than during
+  // render so an abandoned concurrent render cannot leak into the canvas.
+  useEffect(() => { stateRef.current = state; treeRef.current = tree; invalidate() }, [state, tree, invalidate])
+
+  /**
+   * Keep re-framing until the user takes control.
+   *
+   * The first ResizeObserver callback can arrive before the layout settles, and
+   * fitting once against that early size left the tree at roughly half scale in
+   * a mostly empty canvas — measured at 49% of the width and 34% of the height.
+   * Refitting on every resize until the first pan, zoom or allocation gives a
+   * correct opening view without ever yanking the camera from under someone.
+   */
+  const userDrivesCamera = useRef(false)
 
   // --- per-tree setup ---------------------------------------------------
   useLayoutEffect(() => {
     gridRef.current = new HitGrid(tree.nodes.filter((n) => n.k !== Kind.Mastery))
-    spritesRef.current = new SpriteStore(tree, import.meta.env.BASE_URL, invalidate)
-    needsFit.current = true
-    if (vpRef.current.w > 2) {
-      camRef.current.fit(...tree.bounds, vpRef.current)
-      needsFit.current = false
-    }
-    spritesRef.current.preload(camRef.current.scale, CORE_SHEETS)
+    const store = new SpriteStore(tree, import.meta.env.BASE_URL, invalidate)
+    spritesRef.current = store
+    userDrivesCamera.current = false
+    if (vpRef.current.w > 2) camRef.current.fit(...tree.bounds, vpRef.current)
+    store.preload(camRef.current.scale, CORE_SHEETS)
     invalidate()
+    return () => { if (spritesRef.current === store) spritesRef.current = null }
   }, [tree, invalidate])
 
   // --- sizing -----------------------------------------------------------
@@ -73,10 +80,9 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
       canvas.height = Math.round(rect.height * dpr)
       canvas.style.width = `${rect.width}px`
       canvas.style.height = `${rect.height}px`
-      if (needsFit.current) {
+      if (!userDrivesCamera.current) {
         camRef.current.fit(...treeRef.current.bounds, vpRef.current)
         spritesRef.current?.preload(camRef.current.scale, CORE_SHEETS)
-        needsFit.current = false
       }
       invalidate()
     })
@@ -104,9 +110,6 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // Redraw whenever anything the renderer reads changes.
-  useEffect(invalidate, [state, invalidate])
-
   // --- imperative handle ------------------------------------------------
   useEffect(() => {
     if (!handleRef) return
@@ -114,13 +117,19 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
       focus: (nodeId, zoom) => {
         const n = tree.byId.get(nodeId)
         if (!n) return
+        userDrivesCamera.current = true
         const cam = camRef.current
         cam.cx = n.x; cam.cy = n.y
-        if (zoom) cam.scale = zoom
+        if (zoom) cam.scale = clamp(zoom, MIN_SCALE, MAX_SCALE)
         invalidate()
       },
-      fitAll: () => { camRef.current.fit(...tree.bounds, vpRef.current); invalidate() },
+      fitAll: () => {
+        userDrivesCamera.current = true
+        camRef.current.fit(...tree.bounds, vpRef.current)
+        invalidate()
+      },
       fitAllocated: (ids) => {
+        userDrivesCamera.current = true
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
         for (const id of ids) {
           const n = tree.byId.get(id)
@@ -136,7 +145,10 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
   }, [tree, handleRef, invalidate])
 
   // --- pointer ----------------------------------------------------------
-  const drag = useRef({ active: false, moved: false, x: 0, y: 0, id: -1 })
+  /** Every pointer currently down, so two fingers can pinch. */
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const drag = useRef({ moved: false, x: 0, y: 0, id: -1 })
+  const pinch = useRef<{ dist: number } | null>(null)
 
   const nodeAt = useCallback((clientX: number, clientY: number): CompactNode | null => {
     const canvas = canvasRef.current
@@ -152,32 +164,68 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 && e.button !== 2) return
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
-    drag.current = { active: true, moved: false, x: e.clientX, y: e.clientY, id: e.pointerId }
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()]
+      pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y) }
+      drag.current.id = -1 // a second finger ends any tap in progress
+    } else {
+      drag.current = { moved: false, x: e.clientX, y: e.clientY, id: e.pointerId }
+    }
   }, [])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
+    const tracked = pointers.current.get(e.pointerId)
+    if (tracked) { tracked.x = e.clientX; tracked.y = e.clientY }
+
+    // Two fingers: scale about the midpoint. Without this, touch devices have
+    // no way to zoom at all — `touch-action: none` also blocks the native pinch.
+    if (pointers.current.size === 2 && pinch.current) {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const [a, b] = [...pointers.current.values()]
+      const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y)
+      if (dist > 0 && pinch.current.dist > 0) {
+        const rect = canvas.getBoundingClientRect()
+        const mx = (a!.x + b!.x) / 2 - rect.left
+        const my = (a!.y + b!.y) / 2 - rect.top
+        userDrivesCamera.current = true
+        camRef.current.zoomAt(dist / pinch.current.dist, mx, my, vpRef.current)
+        invalidate()
+      }
+      pinch.current.dist = dist
+      onHover(null, 0, 0)
+      return
+    }
+
     const d = drag.current
-    if (d.active && d.id === e.pointerId) {
+    if (d.id === e.pointerId) {
       const dx = e.clientX - d.x, dy = e.clientY - d.y
       if (!d.moved && Math.hypot(dx, dy) > DRAG_SLOP) d.moved = true
       if (d.moved) {
+        userDrivesCamera.current = true
         camRef.current.panBy(dx, dy)
         d.x = e.clientX; d.y = e.clientY
         invalidate()
-        onHover(null)
+        onHover(null, 0, 0)
         return
       }
     }
-    onHover(nodeAt(e.clientX, e.clientY))
+    // Coordinates come straight off the event: reading them from a window-level
+    // listener instead left the tooltip one move behind the cursor.
+    onHover(nodeAt(e.clientX, e.clientY), e.clientX, e.clientY)
   }, [nodeAt, onHover, invalidate])
 
-  const endDrag = useCallback((e: React.PointerEvent) => {
+  const endPointer = useCallback((e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
+
     const d = drag.current
-    if (!d.active || d.id !== e.pointerId) return
-    drag.current = { ...d, active: false }
+    if (d.id !== e.pointerId) return
+    drag.current = { ...d, id: -1 }
     if (d.moved) return
     const node = nodeAt(e.clientX, e.clientY)
-    if (!node || node.k === Kind.Mastery) return
+    if (!node) return
     const deallocating = e.button === 2 || e.shiftKey || e.altKey
     onPick(node, deallocating ? 'deallocate' : 'allocate')
   }, [nodeAt, onPick])
@@ -190,23 +238,47 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const rect = canvas.getBoundingClientRect()
-      const factor = Math.pow(1.0015, -e.deltaY)
-      camRef.current.zoomAt(factor, e.clientX - rect.left, e.clientY - rect.top, vpRef.current)
+      userDrivesCamera.current = true
+      camRef.current.zoomAt(Math.pow(1.0015, -e.deltaY), e.clientX - rect.left, e.clientY - rect.top, vpRef.current)
       invalidate()
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [invalidate])
 
+  // --- keyboard access --------------------------------------------------
+  // The tree is a canvas, so none of it is reachable by keyboard on its own.
+  // Arrow keys pan, +/- zoom, which at least makes the view navigable.
+  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 240 : 80
+    const vp = vpRef.current
+    const cam = camRef.current
+    let handled = true
+    switch (e.key) {
+      case 'ArrowLeft': cam.panBy(step, 0); break
+      case 'ArrowRight': cam.panBy(-step, 0); break
+      case 'ArrowUp': cam.panBy(0, step); break
+      case 'ArrowDown': cam.panBy(0, -step); break
+      case '+': case '=': cam.zoomAt(1.2, vp.w / 2, vp.h / 2, vp); break
+      case '-': case '_': cam.zoomAt(1 / 1.2, vp.w / 2, vp.h / 2, vp); break
+      default: handled = false
+    }
+    if (handled) { e.preventDefault(); userDrivesCamera.current = true; invalidate() }
+  }, [invalidate])
+
   return (
     <div className="canvas-wrap" ref={wrapRef}>
       <canvas
         ref={canvasRef}
+        tabIndex={0}
+        role="application"
+        aria-label="Atlas passive tree. Arrow keys pan, plus and minus zoom. Use the node list to allocate."
+        onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onPointerLeave={() => onHover(null)}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
+        onPointerLeave={() => onHover(null, 0, 0)}
         onContextMenu={(e) => e.preventDefault()}
       />
     </div>

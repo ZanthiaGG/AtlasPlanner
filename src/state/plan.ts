@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { Tree } from '../tree/types.ts'
-import { pathTo, deallocate as deallocateNode, frontier as frontierOf } from '../tree/pathfind.ts'
+import { pathTo, deallocate as deallocateNode, frontier as frontierOf, distancesFrom } from '../tree/pathfind.ts'
 
 export interface Plan {
   allocated: Set<number>
@@ -10,7 +10,34 @@ export interface Plan {
 
 export const emptyPlan = (): Plan => ({ allocated: new Set(), variants: {} })
 
-const HISTORY_LIMIT = 100
+export const HISTORY_LIMIT = 100
+
+/** Undo/redo stack. Exported so the index arithmetic can be tested without React. */
+export interface History {
+  entries: Plan[]
+  cursor: number
+}
+
+export const initialHistory = (plan: Plan = emptyPlan()): History => ({ entries: [plan], cursor: 0 })
+
+export const current = (h: History): Plan => h.entries[h.cursor] ?? h.entries[0]!
+
+/**
+ * Append a state, dropping any redo branch and the oldest entries past the limit.
+ *
+ * The slice keeps at most `HISTORY_LIMIT - 1` entries so that appending lands
+ * exactly on the limit. Keeping `HISTORY_LIMIT` instead grows the array to
+ * `LIMIT + 1` while a separately-clamped cursor stops at `LIMIT - 1`, after
+ * which every commit is written past a cursor that never moves again — the UI
+ * freezes on the 100th edit while Redo lights up. See plan.test.ts.
+ */
+export function commitTo(h: History, next: Plan): History {
+  const kept = h.entries.slice(Math.max(0, h.cursor + 1 - (HISTORY_LIMIT - 1)), h.cursor + 1)
+  return { entries: [...kept, next], cursor: kept.length }
+}
+
+export const undoIn = (h: History): History => ({ ...h, cursor: Math.max(0, h.cursor - 1) })
+export const redoIn = (h: History): History => ({ ...h, cursor: Math.min(h.entries.length - 1, h.cursor + 1) })
 
 /**
  * Allocation state with undo/redo.
@@ -19,29 +46,31 @@ const HISTORY_LIMIT = 100
  * far simpler than diffing, and the memory cost is trivial.
  */
 export function usePlan(tree: Tree | null) {
-  const [history, setHistory] = useState<Plan[]>([emptyPlan()])
-  const [cursor, setCursor] = useState(0)
+  const [history, setHistory] = useState<History>(() => initialHistory())
+  const plan = current(history)
 
-  const plan = history[cursor] ?? history[0]!
+  const commit = useCallback((next: Plan) => setHistory((h) => commitTo(h, next)), [])
 
-  const commit = useCallback((next: Plan) => {
-    setHistory((h) => {
-      const trimmed = h.slice(Math.max(0, cursor + 1 - HISTORY_LIMIT), cursor + 1)
-      return [...trimmed, next]
-    })
-    setCursor((c) => Math.min(c + 1, HISTORY_LIMIT - 1))
-  }, [cursor])
-
-  /** Replace the plan outright (import, load, reset) and reset history. */
-  const replace = useCallback((next: Plan) => {
-    setHistory([next])
-    setCursor(0)
-  }, [])
+  /** Replace the plan outright (import, load, reset) and drop the history. */
+  const replace = useCallback((next: Plan) => setHistory(initialHistory(next)), [])
 
   const frontier = useMemo(
     () => (tree ? frontierOf(tree, plan.allocated) : new Set<number>()),
     [tree, plan.allocated],
   )
+
+  /**
+   * Point cost to reach every node, computed in a single pass and reused by the
+   * node list, the tooltip and the hover preview. Doing this per node instead
+   * meant ~966 graph searches per render.
+   */
+  const distances = useMemo(
+    () => (tree ? distancesFrom(tree, plan.allocated) : new Map<number, number>()),
+    [tree, plan.allocated],
+  )
+
+  /** Points needed to reach `id`, or null when it cannot be reached. */
+  const costOf = useCallback((id: number) => distances.get(id) ?? null, [distances])
 
   /** Nodes that would be added by clicking `id` — the hover preview. */
   const routeTo = useCallback(
@@ -72,13 +101,14 @@ export function usePlan(tree: Tree | null) {
   const deallocate = useCallback((id: number) => {
     if (!tree || !plan.allocated.has(id)) return
     const allocated = deallocateNode(tree, plan.allocated, id)
-    const variants = { ...plan.variants }
-    for (const key of Object.keys(variants)) {
-      if (!allocated.has(Number(key))) delete variants[Number(key)]
+    const variants: Record<number, number> = {}
+    for (const [key, effect] of Object.entries(plan.variants)) {
+      if (allocated.has(Number(key))) variants[Number(key)] = effect
     }
     commit({ allocated, variants })
   }, [tree, plan, commit])
 
+  /** Choose an option on a multiple-choice notable. */
   const setVariant = useCallback((nodeId: number, effectId: number) => {
     commit({ allocated: plan.allocated, variants: { ...plan.variants, [nodeId]: effectId } })
   }, [plan, commit])
@@ -88,19 +118,20 @@ export function usePlan(tree: Tree | null) {
   return {
     plan,
     frontier,
+    distances,
     pointsUsed: plan.allocated.size,
     pointsTotal: tree?.totalPoints ?? 0,
+    pointsLeft: Math.max(0, (tree?.totalPoints ?? 0) - plan.allocated.size),
+    costOf,
     routeTo,
     allocate,
     deallocate,
     setVariant,
     replace,
     reset,
-    undo: useCallback(() => setCursor((c) => Math.max(0, c - 1)), []),
-    redo: useCallback(() => setCursor((c) => Math.min(history.length - 1, c + 1)), [history.length]),
-    canUndo: cursor > 0,
-    canRedo: cursor < history.length - 1,
+    undo: useCallback(() => setHistory(undoIn), []),
+    redo: useCallback(() => setHistory(redoIn), []),
+    canUndo: history.cursor > 0,
+    canRedo: history.cursor < history.entries.length - 1,
   }
 }
-
-export type PlanApi = ReturnType<typeof usePlan>

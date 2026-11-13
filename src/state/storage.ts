@@ -1,4 +1,6 @@
-import { decode, encode } from '../tree/codec.ts'
+import { encode } from '../tree/codec.ts'
+import { importPlan } from '../tree/import.ts'
+import type { Tree } from '../tree/types.ts'
 import type { Plan } from './plan.ts'
 import { emptyPlan } from './plan.ts'
 
@@ -12,26 +14,39 @@ export interface SavedPlan {
   updated: number
 }
 
+/** `encode` throws above 255 nodes; nothing here should take a click down with it. */
+function safeEncode(plan: Plan): string | null {
+  try {
+    return encode({ nodes: [...plan.allocated], variants: plan.variants })
+  } catch {
+    return null
+  }
+}
+
 // ---------------------------------------------------------------- url hash
 
 /** Mirror the current plan into `#<code>` so the page URL is always shareable. */
 export function writeHash(plan: Plan) {
+  const code = plan.allocated.size ? safeEncode(plan) : null
   try {
-    const code = encode({ nodes: [...plan.allocated], variants: plan.variants })
-    const next = plan.allocated.size ? `#${code}` : ' '
-    history.replaceState(null, '', next)
+    history.replaceState(null, '', code ? `#${code}` : ' ')
   } catch {
-    // An over-long plan simply does not get mirrored; the app still works.
+    /* some embedded webviews refuse replaceState; the app still works */
   }
 }
 
-/** Read a plan out of the page URL on first load. */
-export function readHash(): Plan | null {
+/**
+ * Read a plan out of the page URL on first load.
+ *
+ * Validated against the tree, so a stale or hand-edited hash cannot produce a
+ * point total with nothing on the canvas.
+ */
+export function readHash(tree: Tree): Plan | null {
   const raw = location.hash.replace(/^#/, '')
   if (!raw) return null
   try {
-    const { nodes, variants } = decode(raw)
-    return { allocated: new Set(nodes), variants }
+    const r = importPlan(tree, raw)
+    return { allocated: r.allocated, variants: r.variants }
   } catch {
     return null
   }
@@ -60,7 +75,8 @@ function writePlans(plans: SavedPlan[]) {
 }
 
 export function savePlan(plans: SavedPlan[], name: string, plan: Plan): SavedPlan[] {
-  const code = encode({ nodes: [...plan.allocated], variants: plan.variants })
+  const code = safeEncode(plan)
+  if (code === null) return plans
   const existing = plans.find((p) => p.name === name)
   const next = existing
     ? plans.map((p) => (p.id === existing.id ? { ...p, code, updated: Date.now() } : p))
@@ -76,10 +92,12 @@ export function deletePlan(plans: SavedPlan[], id: string): SavedPlan[] {
   return next
 }
 
-export function planFromSaved(saved: SavedPlan): Plan {
+/** Saved plans are stored as codes; they still need validating on the way back in. */
+export function planFromSaved(saved: SavedPlan, tree?: Tree): Plan {
+  if (!tree) return emptyPlan()
   try {
-    const { nodes, variants } = decode(saved.code)
-    return { allocated: new Set(nodes), variants }
+    const r = importPlan(tree, saved.code)
+    return { allocated: r.allocated, variants: r.variants }
   } catch {
     return emptyPlan()
   }

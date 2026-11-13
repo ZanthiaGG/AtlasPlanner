@@ -51,30 +51,6 @@ export function nodePos(
   ]
 }
 
-/**
- * Whether an edge between two nodes should be drawn as an arc along their shared
- * orbit rather than a straight line. Both ends must sit on the same orbit of the
- * same group, and orbit 0 (the single centre slot) can never arc.
- */
-export function isArc(
-  a: { g: number; r: number },
-  b: { g: number; r: number },
-): boolean {
-  return a.g === b.g && a.r === b.r && a.r > 0
-}
-
-/**
- * Sweep direction for an arc, from the cross product of the two endpoints taken
- * about the group centre. Positive cross -> clockwise in canvas coordinates.
- */
-export function arcSweep(
-  cx: number, cy: number,
-  ax: number, ay: number,
-  bx: number, by: number,
-): boolean {
-  return (ax - cx) * (by - cy) - (ay - cy) * (bx - cx) < 0
-}
-
 /** Strip GGG's `[Internal|Display]` and `[Display]` markup from a string. */
 export function cleanMarkup(s: string): string {
   return s.replace(/\[([^\]|]+)\|([^\]]+)\]/g, '$2').replace(/\[([^\]]+)\]/g, '$1')

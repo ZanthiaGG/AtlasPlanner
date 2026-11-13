@@ -1,7 +1,7 @@
 import { Kind } from '../tree/types.ts'
 import type { CompactNode, SheetKey, Tree } from '../tree/types.ts'
 import type { MechanicId } from '../tree/mechanics.ts'
-import { MECHANIC_BY_ID } from '../tree/mechanics.ts'
+import { mechanicColor } from '../tree/mechanics.ts'
 import type { Camera, Viewport } from './camera.ts'
 import type { SpriteStore } from './sprites.ts'
 
@@ -28,6 +28,8 @@ export interface RenderState {
   searchHits: ReadonlySet<number>
   /** Empty means "no filter" — everything draws at full strength. */
   activeMechanics: ReadonlySet<MechanicId>
+  /** Selection order, which decides each mechanic's colour. */
+  selectedMechanics: MechanicId[]
   hovered: number | null
   showGroupBackgrounds: boolean
   showAtlasBackground: boolean
@@ -297,7 +299,7 @@ export function draw(
     // whole point of the filter.
     if (filtering && !dim) {
       ctx.globalAlpha = 0.9
-      ctx.strokeStyle = MECHANIC_BY_ID.get(n.m)?.color ?? COLORS.frontier
+      ctx.strokeStyle = mechanicColor(n.m, st.selectedMechanics)
       ctx.lineWidth = Math.max(1, (n.k === Kind.Small ? 4 : 6) * cam.scale)
       ctx.beginPath()
       ctx.arc(px, py, hitRadius(n) * cam.scale * 1.12, 0, Math.PI * 2)

@@ -1,11 +1,13 @@
 /*
- * Neutral dark graphite with a single blue accent. Mechanic colours are the only
- * other hues on screen, so the filter chips stay the loudest thing in the UI.
+ * Neutral dark graphite with a single blue accent. Mechanic colours are assigned
+ * on selection (see tree/mechanics.ts), so the only hues on screen at any moment
+ * are the handful you asked for.
  */
 :root {
   --bg: #0d0f13;
   --surface: #151820;
   --surface-2: #1b1f29;
+  --float: #171b24;
   --line: #262b36;
   --line-soft: #1f2430;
   --text: #dde3ec;
@@ -17,13 +19,12 @@
   --danger: #e06a6a;
 
   --radius: 7px;
-  --sidebar-w: 356px;
+  --sidebar-w: 372px;
 
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
-
 html, body, #root { height: 100%; }
 
 body {
@@ -37,19 +38,18 @@ body {
 }
 
 h1, h2 { margin: 0; font-weight: 600; }
-
 a { color: var(--accent); }
 
-kbd {
-  display: inline-block;
-  padding: 1px 5px;
-  margin: 0 2px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
+/* One visible focus treatment for every control, including the canvas. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
   border-radius: 4px;
-  background: var(--surface-2);
-  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation-duration: .01ms !important; }
 }
 
 /* ---------------------------------------------------------------- layout */
@@ -58,34 +58,30 @@ kbd {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   height: 100%;
-  transition: grid-template-columns .18s ease;
 }
-
 /* One column, not `0 1fr`: the hidden sidebar leaves the grid entirely, so a
-   two-column template would drop <main> into the 0-width first column and the
-   canvas would vanish. */
+   two-column template would drop <main> into the 0-width first column. */
 .app.collapsed { grid-template-columns: 1fr; }
 
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--line);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px 16px 24px;
+  padding: 14px 14px 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
-
 .app.collapsed .sidebar { display: none; }
 
 .sidebar-toggle {
   position: absolute;
   top: 12px;
   left: var(--sidebar-w);
-  z-index: 20;
+  z-index: 30;
   width: 20px;
-  height: 36px;
+  height: 38px;
   padding: 0;
   border: 1px solid var(--line);
   border-left: none;
@@ -93,129 +89,63 @@ kbd {
   background: var(--surface);
   color: var(--text-dim);
   cursor: pointer;
-  transition: left .18s ease;
 }
 .app.collapsed .sidebar-toggle { left: 0; }
 .sidebar-toggle:hover { color: var(--text); }
 
-main {
-  position: relative;
-  overflow: hidden;
-}
-
+main { position: relative; overflow: hidden; }
 .canvas-wrap { position: absolute; inset: 0; }
 .canvas-wrap canvas { display: block; touch-action: none; cursor: crosshair; }
 
 /* ---------------------------------------------------------------- brand */
 
-.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand { display: flex; align-items: baseline; gap: 8px; flex: none; }
 .brand h1 { font-size: 17px; letter-spacing: .2px; }
-.version {
-  font-size: 11px;
-  color: var(--text-faint);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 1px 7px;
-}
+.version { font-size: 11px; color: var(--text-faint); border: 1px solid var(--line); border-radius: 20px; padding: 1px 7px; }
 
-/* ---------------------------------------------------------------- panels */
+/* ---------------------------------------------------------------- filters */
 
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  flex: none;
-  min-height: 0;
-}
-/* The node list is the one panel worth giving the leftover height to. The
-   min-height matters: without it the panel shrinks past its content when every
-   section is expanded, and because panel contents are `overflow: visible` they
-   spill over the next section's header instead of making the sidebar scroll. */
-.panel.grow { flex: 1 1 auto; min-height: 300px; }
+.filterbar { display: flex; flex-direction: column; gap: 8px; flex: none; }
+.search { width: 100%; }
 
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
+.filter-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 
-.panel-toggle {
-  display: flex;
+.filter-add {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
-  min-width: 0;
-  background: none;
-  border: none;
-  border-radius: 0;
-  padding: 2px 0;
-  text-align: left;
-}
-.panel-toggle:hover:not(:disabled) { background: none; border-color: transparent; }
-.panel-toggle:hover h2 { color: var(--text-dim); }
-
-.panel-head h2 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-  color: var(--text-faint);
-}
-
-.caret {
-  display: inline-block;
-  width: 9px;
-  font-size: 13px;
-  line-height: 1;
-  color: var(--text-faint);
-  transition: transform .15s ease;
-}
-.caret.open { transform: rotate(90deg); }
-
-.panel-badge {
-  font-size: 10.5px;
-  color: var(--accent);
-  background: rgba(77, 181, 255, .1);
+  padding: 5px 11px;
   border-radius: 20px;
-  padding: 1px 7px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  font-size: 12.5px;
+  background: var(--surface-2);
+}
+.filter-add.on { border-color: var(--accent-dim); color: var(--accent); }
+.filter-add .pill {
+  background: var(--accent);
+  color: #06121c;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 0 6px;
 }
 
-.panel-body {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  min-height: 0;
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--bg);
 }
-.panel.grow .panel-body { flex: 1 1 auto; }
+.filter-chip i { width: 7px; height: 7px; border-radius: 50%; }
+.filter-chip .x { color: var(--text-faint); font-size: 13px; line-height: 1; }
+.filter-chip:hover .x { color: var(--danger); }
+.filter-chip.query { color: var(--text-dim); border-color: var(--line); }
 
-.subhead {
-  margin-top: 6px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-  color: var(--text-faint);
-}
+/* ---------------------------------------------------------------- controls */
 
-.hint { margin: 0; font-size: 12px; color: var(--text-faint); }
-.error { margin: 0; font-size: 12px; color: var(--danger); }
-
-.link {
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: 11px;
-  color: var(--accent);
-  cursor: pointer;
-}
-
-/* ---------------------------------------------------------------- inputs */
-
-input, button {
-  font: inherit;
-  color: inherit;
-}
+input, button { font: inherit; color: inherit; }
 
 input {
   background: var(--bg);
@@ -225,7 +155,7 @@ input {
   min-width: 0;
 }
 input::placeholder { color: var(--text-faint); }
-input:focus { outline: none; border-color: var(--accent-dim); }
+input:focus-visible { border-color: var(--accent-dim); }
 
 button {
   background: var(--surface-2);
@@ -239,48 +169,18 @@ button:hover:not(:disabled) { background: #222733; border-color: #333a48; }
 button:disabled { opacity: .4; cursor: default; }
 button.primary { border-color: var(--accent-dim); color: var(--accent); }
 button.primary:hover:not(:disabled) { background: #16293a; }
+button.danger { border-color: var(--danger); color: var(--danger); }
 
 .row { display: flex; gap: 7px; }
 .row .grow { flex: 1; }
 .row > button { white-space: nowrap; }
 
-.search { width: 100%; }
+.link { background: none; border: none; padding: 0; font-size: 11.5px; color: var(--accent); cursor: pointer; }
+.link:hover:not(:disabled) { background: none; text-decoration: underline; }
 
-/* ---------------------------------------------------------------- results */
-
-.results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 232px;
-  overflow-y: auto;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-}
-
-.result {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  background: none;
-  border: none;
-  border-radius: 0;
-  padding: 6px 9px;
-  text-align: left;
-}
-.result:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
-.result i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.result-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-.result.on .result-name { color: var(--accent); }
-.result-tag { font-size: 10px; color: var(--text-faint); flex: none; }
-.more { padding: 6px 9px; font-size: 11px; color: var(--text-faint); }
+.hint { margin: 0; font-size: 12px; color: var(--text-faint); }
+.error { margin: 0; font-size: 12px; color: var(--danger); }
+.subhead { margin-top: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); }
 
 /* ---------------------------------------------------------------- node list */
 
@@ -290,46 +190,25 @@ button.primary:hover:not(:disabled) { background: #16293a; }
 .nl-summary strong { color: var(--accent); font-size: 13px; }
 .nl-dim { color: var(--text-faint); }
 
-/* `flex: none` or the growing node list below squashes it to a sliver. */
-.seg {
-  display: flex;
-  flex: none;
-  gap: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.seg button {
-  flex: 1;
-  border: none;
-  border-radius: 0;
-  background: var(--bg);
-  font-size: 11.5px;
-  padding: 5px 0;
-  color: var(--text-faint);
-}
+.seg { display: flex; flex: none; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg button { flex: 1; border: none; border-radius: 0; background: var(--bg); font-size: 11.5px; padding: 5px 0; color: var(--text-faint); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--surface-2); color: var(--accent); }
 
 .nl-rows {
   list-style: none;
-  margin: 0;
-  padding: 0;
+  margin: 0 -14px 0 0;
+  padding: 0 14px 0 0;
   overflow-y: auto;
   min-height: 0;
   flex: 1 1 auto;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
 }
 
-.nl-row {
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid var(--line-soft);
-}
-.nl-row:last-child { border-bottom: none; }
+.nl-row { border-bottom: 1px solid var(--line-soft); }
 .nl-row.done { background: rgba(77, 181, 255, .055); }
 .nl-row.part { background: rgba(255, 217, 90, .045); }
+
+.nl-main { display: flex; align-items: stretch; }
 
 .nl-pick {
   display: flex;
@@ -340,7 +219,7 @@ button.primary:hover:not(:disabled) { background: #16293a; }
   background: none;
   border: none;
   border-radius: 0;
-  padding: 7px 4px 7px 9px;
+  padding: 8px 4px 8px 6px;
   text-align: left;
 }
 .nl-pick:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
@@ -349,99 +228,167 @@ button.primary:hover:not(:disabled) { background: #16293a; }
 .nl-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .nl-name { font-size: 12.5px; line-height: 1.35; }
 .nl-row.done .nl-name { color: var(--accent); }
-.nl-tag {
-  font-size: 9.5px;
-  font-style: normal;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--text-faint);
-  margin-left: 6px;
-}
+.nl-tag { font-size: 9.5px; font-style: normal; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); margin-left: 6px; }
 .nl-stats { font-size: 11.5px; line-height: 1.4; color: #7f93ab; white-space: pre-line; }
 
-.nl-count {
-  flex: none;
-  font-size: 11.5px;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-  padding-top: 1px;
-}
+.nl-meta { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 1px; }
+.nl-count { font-size: 11.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .nl-row.done .nl-count { color: var(--accent); }
+.nl-cost { font-size: 10.5px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.nl-cost.unaffordable { color: var(--danger); }
+.nl-cost.unreachable { color: var(--text-faint); }
 
 .nl-acts { display: flex; flex-direction: column; flex: none; border-left: 1px solid var(--line-soft); }
-.nl-act {
-  flex: 1;
-  width: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: none;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--text-faint);
-}
+.nl-act { flex: 1; width: 28px; padding: 0; border: none; border-radius: 0; background: none; font-size: 14px; line-height: 1; color: var(--text-faint); }
 .nl-act + .nl-act { border-top: 1px solid var(--line-soft); }
 .nl-act.add:hover:not(:disabled) { background: rgba(77, 181, 255, .16); color: var(--accent); border-color: transparent; }
 .nl-act.remove:hover:not(:disabled) { background: rgba(224, 106, 106, .16); color: var(--danger); border-color: transparent; }
 
-/* ---------------------------------------------------------------- chips */
-
-/* Capped so the 43 chips can never swallow the sidebar even when expanded. */
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  max-height: 232px;
-  overflow-y: auto;
+.nl-variants { padding: 2px 8px 9px 21px; display: flex; flex-direction: column; gap: 3px; }
+.nl-variants-head { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--gold); }
+.nl-variant {
+  text-align: left;
+  font-size: 11.5px;
+  line-height: 1.35;
+  padding: 5px 8px;
+  background: var(--bg);
+  border-color: var(--line-soft);
+  color: var(--text-faint);
+  white-space: pre-line;
 }
+.nl-variant.chosen { border-color: var(--gold); color: var(--gold); background: rgba(255, 217, 90, .07); }
+
+/* ---------------------------------------------------------------- chips (picker) */
+
+.chips { display: flex; flex-wrap: wrap; gap: 5px; overflow-y: auto; min-height: 0; }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 8px;
+  padding: 4px 9px;
   font-size: 11.5px;
   border-radius: 20px;
   background: var(--bg);
   color: var(--text-dim);
 }
-.chip i { width: 7px; height: 7px; border-radius: 50%; flex: none; opacity: .8; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; flex: none; opacity: .7; }
 .chip.on { background: var(--surface-2); }
 .chip.on i { opacity: 1; }
 .chip-count { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .chip.on .chip-count { color: inherit; opacity: .75; }
 
-/* ---------------------------------------------------------------- points */
+/* ---------------------------------------------------------------- hud */
+
+.hudbar {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 20;
+  display: flex;
+  gap: 7px;
+  align-items: stretch;
+}
+
+.hud {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 7px 13px;
+  background: rgba(21, 24, 32, .94);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-variant-numeric: tabular-nums;
+}
+.hud strong { font-size: 17px; color: var(--accent); }
+.hud span { font-size: 12px; color: var(--text-faint); }
+.hud.over strong { color: var(--danger); }
+
+.hud-btn { background: rgba(21, 24, 32, .94); font-size: 12.5px; }
+.hud-btn.on { border-color: var(--accent-dim); color: var(--accent); }
+
+/* ---------------------------------------------------------------- popovers */
+
+.popover {
+  position: absolute;
+  z-index: 40;
+  width: 360px;
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--float);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .6);
+}
+.pop-top-right { top: 56px; right: 14px; }
+.pop-sidebar { top: 12px; left: 12px; }
+
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+.pop-head h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); }
+.pop-close { background: none; border: none; padding: 0 4px; font-size: 18px; line-height: 1; color: var(--text-faint); }
+.pop-close:hover:not(:disabled) { background: none; color: var(--text); }
+
+.pop-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.pop-search { width: 100%; flex: none; }
+.pop-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
+
+/* ---------------------------------------------------------------- summary */
+
+.sum-head { margin: 0; font-size: 12px; color: var(--text-dim); }
+.sum-head strong { color: var(--accent); font-size: 14px; }
+
+.sum-warn {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--gold);
+  background: rgba(255, 217, 90, .07);
+  border: 1px solid rgba(255, 217, 90, .25);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+}
+.sum-warn .link { color: var(--gold); font-size: 11.5px; }
+
+.sum-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sum-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sum-list li:last-child { border-bottom: none; }
+.sum-text { font-size: 12.5px; line-height: 1.4; color: #a8d8ff; }
+.sum-list.effects .sum-text { color: var(--text-dim); font-size: 12px; }
+.sum-count { flex: none; font-size: 10.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- plan */
 
 .points { display: flex; flex-direction: column; gap: 5px; }
-.points-bar {
-  height: 5px;
-  border-radius: 3px;
-  background: var(--line-soft);
-  overflow: hidden;
-}
-.points-bar > div {
-  height: 100%;
-  background: var(--accent);
-  transition: width .15s ease;
-}
+.points-bar { height: 5px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.points-bar > div { height: 100%; background: var(--accent); transition: width .15s ease; }
 .points.over .points-bar > div { background: var(--danger); }
 .points-text { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .points-text strong { color: var(--text); font-size: 14px; }
 
-/* ---------------------------------------------------------------- saved */
-
 .saved { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .saved li { display: flex; gap: 4px; }
-.saved-load {
-  flex: 1;
-  text-align: left;
-  font-size: 12.5px;
-  padding: 5px 9px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.saved-load { flex: 1; text-align: left; font-size: 12.5px; padding: 5px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .saved-del { padding: 5px 9px; color: var(--text-faint); }
 .saved-del:hover { color: var(--danger); }
 
@@ -461,29 +408,18 @@ button.primary:hover:not(:disabled) { background: #16293a; }
   flex-direction: column;
   gap: 7px;
 }
-
 .tt-head { display: flex; align-items: baseline; gap: 8px; justify-content: space-between; }
 .tt-name { font-weight: 600; font-size: 14px; }
 .tt-kind { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); flex: none; }
-
 .tt-mechanic { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
 .tt-mechanic i { width: 7px; height: 7px; border-radius: 50%; }
-
 .tt-stats { font-size: 13px; color: #a8d8ff; white-space: pre-line; }
 .tt-sub { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); margin-bottom: 3px; }
 .tt-variants { border-top: 1px solid var(--line-soft); padding-top: 7px; }
-.tt-variant {
-  font-size: 12px;
-  color: var(--text-faint);
-  padding: 2px 0 2px 10px;
-  border-left: 2px solid var(--line);
-  white-space: pre-line;
-}
+.tt-variant { font-size: 12px; color: var(--text-faint); padding: 2px 0 2px 10px; border-left: 2px solid var(--line); white-space: pre-line; }
 .tt-variant.chosen { color: var(--gold); border-left-color: var(--gold); }
-
 .tt-reminder { font-size: 11.5px; color: var(--text-faint); white-space: pre-line; }
 .tt-flavour { font-size: 11.5px; color: #7a6a52; font-style: italic; white-space: pre-line; }
-
 .tt-foot { border-top: 1px solid var(--line-soft); padding-top: 6px; font-size: 11.5px; }
 .tt-cost { color: var(--gold); }
 .tt-on { color: var(--accent); }
@@ -491,84 +427,54 @@ button.primary:hover:not(:disabled) { background: #16293a; }
 
 /* ---------------------------------------------------------------- overlays */
 
-.hud {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 10;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 7px 13px;
-  background: rgba(21, 24, 32, .92);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-variant-numeric: tabular-nums;
-}
-.hud strong { font-size: 17px; color: var(--accent); }
-.hud span { font-size: 12px; color: var(--text-faint); }
-.hud.over strong { color: var(--danger); }
-
-.view-actions {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  display: flex;
-  gap: 7px;
-  z-index: 10;
-}
+.view-actions { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 7px; z-index: 10; }
 .view-actions button { background: rgba(21, 24, 32, .92); font-size: 12.5px; }
 
+.toast-slot { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 45; }
 .toast {
-  position: absolute;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  z-index: 40;
   padding: 9px 15px;
   background: rgba(21, 24, 32, .97);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   font-size: 13px;
+  text-align: center;
   box-shadow: 0 8px 26px rgba(0, 0, 0, .5);
 }
 
-/* ---------------------------------------------------------------- credits */
-
-.credits { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line-soft); flex: none; }
-.credits p { margin: 0 0 7px; font-size: 11px; color: var(--text-faint); line-height: 1.5; }
-.credits .keys { line-height: 2; }
+.credits { flex: none; padding: 8px 0 12px; border-top: 1px solid var(--line-soft); }
+.credits p { margin: 0; font-size: 11px; color: var(--text-faint); line-height: 1.5; }
 
 /* ---------------------------------------------------------------- boot */
 
-.boot {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  color: var(--text-dim);
-}
+.boot { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--text-dim); }
 .boot h1 { font-size: 17px; color: var(--text); }
 .error-boot p { max-width: 520px; text-align: center; font-size: 13px; }
-
-.spinner {
-  width: 26px;
-  height: 26px;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
+.spinner { width: 26px; height: 26px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------------------------------------------------------------- narrow */
 
 @media (max-width: 760px) {
-  :root { --sidebar-w: 100%; }
-  .app { grid-template-columns: 1fr; }
-  .app:not(.collapsed) main { display: none; }
+  /* The canvas is always the page; the sidebar slides over it. Previously the
+     sidebar took the whole screen on load and the tree was invisible. */
+  .app, .app.collapsed { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(92vw, 400px);
+    z-index: 60;
+    display: flex;
+    box-shadow: 0 0 60px rgba(0, 0, 0, .7);
+  }
   .app.collapsed .sidebar { display: none; }
-  .sidebar-toggle { left: auto; right: 0; border-radius: var(--radius) 0 0 var(--radius); border-left: 1px solid var(--line); }
+  .sidebar-toggle { left: auto; right: 0; border-radius: var(--radius) 0 0 var(--radius); border-left: 1px solid var(--line); border-right: none; }
+  .app:not(.collapsed) .sidebar-toggle { left: min(92vw, 400px); right: auto; border-radius: 0 var(--radius) var(--radius) 0; }
+
+  .popover { width: min(92vw, 400px); }
+  .pop-sidebar { left: 50%; transform: translateX(-50%); }
+  .pop-top-right { right: 50%; transform: translateX(50%); }
+
+  /* Touch targets. */
+  .nl-act { width: 40px; }
+  .hud-btn, .filter-add, .chip { padding: 8px 12px; }
 }

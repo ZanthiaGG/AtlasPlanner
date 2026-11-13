@@ -10,8 +10,12 @@ import type { Tree } from './types.ts'
  * nudges that break ties toward routes picking up notables. Adapted from
  * `Path of Claude/src/atlas.ts:162`.
  *
- * Costs stay within (0.98, 1] so a "cheaper" route can never beat a genuinely
- * shorter one: 150 nodes x 0.02 max discount < 1 point.
+ * The discount is 0.01, so a step costs between 0.99 and 1. An (L+1)-step route
+ * can therefore only undercut an L-step one once 0.99 * (L + 1) < L, i.e. at
+ * L >= 100. The deepest node on the 3.30 tree is 21 steps from the start and
+ * multi-source distances only shrink, so hop count always wins and the discount
+ * only ever breaks ties. Raising it past 1/L for the tree's depth would make
+ * this routine start returning genuinely longer routes.
  */
 function stepCost(tree: Tree, id: number): number {
   const n = tree.byId.get(id)
@@ -94,6 +98,40 @@ export function pathTo(tree: Tree, allocated: ReadonlySet<number>, target: numbe
     route.push(at)
   }
   return route.reverse()
+}
+
+/**
+ * Point cost to reach *every* node from the allocated set, in one pass.
+ *
+ * Because step costs sit in [0.99, 1] and the tree is only 21 deep, the
+ * cheapest route is always one with the fewest hops (see the note above), so an
+ * unweighted multi-source BFS gives exactly the same point cost `pathTo` would
+ * report — in O(V + E) rather than a heap-based search per target.
+ *
+ * The UI needs this for hundreds of rows at once; calling `pathTo` per node
+ * instead meant ~966 full graph searches on every render.
+ */
+export function distancesFrom(tree: Tree, allocated: ReadonlySet<number>): Map<number, number> {
+  const dist = new Map<number, number>()
+  let layer: number[] = []
+  for (const id of sources(tree, allocated)) {
+    if (!tree.byId.has(id) && id !== tree.start) continue
+    if (dist.has(id)) continue
+    dist.set(id, 0)
+    layer.push(id)
+  }
+  for (let d = 1; layer.length; d++) {
+    const next: number[] = []
+    for (const id of layer) {
+      for (const n of tree.adj.get(id) ?? []) {
+        if (dist.has(n)) continue
+        dist.set(n, d)
+        next.push(n)
+      }
+    }
+    layer = next
+  }
+  return dist
 }
 
 /** The allocated set plus the always-owned start node. */

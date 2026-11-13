@@ -1,19 +1,25 @@
 import { useMemo, useState } from 'react'
 import { Kind } from '../tree/types.ts'
 import type { CompactNode } from '../tree/types.ts'
-import { MECHANIC_BY_ID } from '../tree/mechanics.ts'
+import { mechanicColor } from '../tree/mechanics.ts'
+import type { MechanicId } from '../tree/mechanics.ts'
 
-export type ListFilter = 'all' | 'taken' | 'available'
+export type ListFilter = 'all' | 'available' | 'taken'
 
 interface Props {
   /** The nodes to list — already narrowed by the mechanic chips and/or search. */
   pool: CompactNode[]
   allocated: ReadonlySet<number>
+  /** nodeId -> chosen effectId. */
+  variants: Record<number, number>
   /** Points needed to reach a node, or null if unreachable. */
   costOf: (id: number) => number | null
+  pointsLeft: number
+  selectedMechanics: MechanicId[]
   onFocus: (node: CompactNode) => void
   onAllocate: (node: CompactNode) => void
   onDeallocate: (node: CompactNode) => void
+  onChooseVariant: (nodeId: number, effectId: number) => void
   emptyHint: string
 }
 
@@ -22,7 +28,7 @@ interface Row {
   name: string
   stats: string
   kind: Kind
-  mechanic: CompactNode['m']
+  mechanic: MechanicId
   /** Every node sharing this exact name and stat text. */
   nodes: CompactNode[]
   taken: number
@@ -37,11 +43,10 @@ const KIND_TAG: Partial<Record<Kind, string>> = {
 /**
  * Every modifier in the current selection, with how many of each you own.
  *
- * The Atlas repeats the same passive many times over — there are a dozen
- * identical "Strongbox Item Quantity" nodes — so listing raw nodes would be a
- * wall of duplicates. Rows are grouped by identical name and stat text and
- * carry a `taken / total` count instead, which turns the panel into a
- * checklist of what a mechanic actually offers.
+ * The Atlas repeats the same passive many times over — there are 44 identical
+ * "Map Drop Chance" nodes — so listing raw nodes would be a wall of duplicates.
+ * Rows group by identical name and stat text and carry a `taken / total` count,
+ * which turns the panel into a checklist of what a mechanic actually offers.
  */
 export function NodeList(p: Props) {
   const [filter, setFilter] = useState<ListFilter>('all')
@@ -59,11 +64,8 @@ export function NodeList(p: Props) {
       }
       row.nodes.push(n)
       if (p.allocated.has(n.i)) row.taken++
-      // A group's kind is the most significant kind among its members
-      // (masteries are already filtered out above).
       if (n.k > row.kind) row.kind = n.k
     }
-
     const all = [...byKey.values()]
     all.sort((a, b) => b.kind - a.kind || a.name.localeCompare(b.name))
     return all
@@ -85,13 +87,9 @@ export function NodeList(p: Props) {
         <span className="nl-dim"> · {rows.length} distinct</span>
       </div>
 
-      <div className="seg">
+      <div className="seg" role="group" aria-label="Filter the list">
         {(['all', 'available', 'taken'] as ListFilter[]).map((f) => (
-          <button
-            key={f}
-            className={filter === f ? 'on' : ''}
-            onClick={() => setFilter(f)}
-          >
+          <button key={f} className={filter === f ? 'on' : ''} aria-pressed={filter === f} onClick={() => setFilter(f)}>
             {f === 'all' ? 'All' : f === 'available' ? 'Available' : 'Taken'}
           </button>
         ))}
@@ -107,61 +105,91 @@ export function NodeList(p: Props) {
         {shown.map((r) => {
           const free = r.nodes.filter((n) => !p.allocated.has(n.i))
           const complete = free.length === 0
-          // Cheapest route among the copies — the Atlas scatters identical
-          // passives around, and the nearest one is rarely the first in the list.
+
+          // Identical passives are scattered all over the Atlas, so the nearest
+          // copy is rarely the first one found.
           let best: CompactNode | null = null
           let bestCost = Infinity
           for (const n of free) {
             const c = p.costOf(n.i)
             if (c !== null && c < bestCost) { bestCost = c; best = n }
           }
-          const mech = MECHANIC_BY_ID.get(r.mechanic)
+          const affordable = best !== null && bestCost <= p.pointsLeft
+          const color = mechanicColor(r.mechanic, p.selectedMechanics)
+
+          // A choice notable needs an option picked before it does anything.
+          const chooseable = r.nodes.filter((n) => n.v && p.allocated.has(n.i))
 
           return (
             <li key={r.key} className={'nl-row' + (complete ? ' done' : r.taken ? ' part' : '')}>
-              <button
-                className="nl-pick"
-                onClick={() => p.onFocus(best ?? r.nodes[0]!)}
-                title="Show on the tree"
-              >
-                <i style={{ background: mech?.color ?? '#888' }} />
-                <span className="nl-text">
-                  <span className="nl-name">
-                    {r.name}
-                    {KIND_TAG[r.kind] && <em className="nl-tag">{KIND_TAG[r.kind]}</em>}
+              <div className="nl-main">
+                <button className="nl-pick" onClick={() => p.onFocus(best ?? r.nodes[0]!)} title="Show on the tree">
+                  <i style={{ background: color }} />
+                  <span className="nl-text">
+                    <span className="nl-name">
+                      {r.name}
+                      {KIND_TAG[r.kind] && <em className="nl-tag">{KIND_TAG[r.kind]}</em>}
+                    </span>
+                    {r.stats && <span className="nl-stats">{r.stats}</span>}
                   </span>
-                  {r.stats && <span className="nl-stats">{r.stats}</span>}
-                </span>
-                <span className="nl-count">
-                  {r.taken}<span className="nl-dim">/{r.nodes.length}</span>
-                </span>
-              </button>
+                  <span className="nl-meta">
+                    <span className="nl-count">{r.taken}<span className="nl-dim">/{r.nodes.length}</span></span>
+                    {!complete && best !== null && (
+                      <span className={'nl-cost' + (affordable ? '' : ' unaffordable')}>
+                        {affordable ? `${bestCost}p` : `${bestCost}p`}
+                      </span>
+                    )}
+                    {!complete && best === null && <span className="nl-cost unreachable">—</span>}
+                  </span>
+                </button>
 
-              <div className="nl-acts">
-                <button
-                  className="nl-act add"
-                  disabled={complete || !best}
-                  onClick={() => best && p.onAllocate(best)}
-                  title={
-                    complete ? 'All copies allocated'
-                      : best ? `Allocate the nearest copy — ${bestCost} point${bestCost === 1 ? '' : 's'}`
-                      : 'Unreachable'
-                  }
-                >
-                  +
-                </button>
-                <button
-                  className="nl-act remove"
-                  disabled={r.taken === 0}
-                  onClick={() => {
-                    const owned = r.nodes.find((n) => p.allocated.has(n.i))
-                    if (owned) p.onDeallocate(owned)
-                  }}
-                  title="Remove a copy"
-                >
-                  −
-                </button>
+                <div className="nl-acts">
+                  <button
+                    className="nl-act add"
+                    disabled={complete || !affordable}
+                    onClick={() => best && p.onAllocate(best)}
+                    aria-label={`Allocate ${r.name}`}
+                    title={
+                      complete ? 'All copies allocated'
+                        : best === null ? 'Unreachable'
+                        : !affordable ? `Needs ${bestCost} points, you have ${p.pointsLeft} left`
+                        : `Allocate the nearest copy — ${bestCost} point${bestCost === 1 ? '' : 's'}`
+                    }
+                  >
+                    +
+                  </button>
+                  <button
+                    className="nl-act remove"
+                    disabled={r.taken === 0}
+                    onClick={() => {
+                      const owned = r.nodes.find((n) => p.allocated.has(n.i))
+                      if (owned) p.onDeallocate(owned)
+                    }}
+                    aria-label={`Remove ${r.name}`}
+                    title="Remove a copy"
+                  >
+                    −
+                  </button>
+                </div>
               </div>
+
+              {chooseable.map((n) => (
+                <div className="nl-variants" key={n.i}>
+                  <div className="nl-variants-head">
+                    {p.variants[n.i] === undefined ? 'Choose an option' : 'Option'}
+                  </div>
+                  {n.v!.map(([effect, stats]) => (
+                    <button
+                      key={effect}
+                      className={'nl-variant' + (p.variants[n.i] === effect ? ' chosen' : '')}
+                      aria-pressed={p.variants[n.i] === effect}
+                      onClick={() => p.onChooseVariant(n.i, effect)}
+                    >
+                      {stats}
+                    </button>
+                  ))}
+                </div>
+              ))}
             </li>
           )
         })}

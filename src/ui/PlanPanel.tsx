@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { encodeUrl, decode } from '../tree/codec.ts'
+import { encodeUrl } from '../tree/codec.ts'
 import type { Plan } from '../state/plan.ts'
 import type { SavedPlan } from '../state/storage.ts'
 
@@ -12,7 +12,8 @@ interface Props {
   onUndo: () => void
   onRedo: () => void
   onReset: () => void
-  onImport: (plan: Plan) => void
+  /** Throws with a readable message when the text is not importable. */
+  onImport: (text: string) => void
   saved: SavedPlan[]
   onSave: (name: string) => void
   onLoad: (saved: SavedPlan) => void
@@ -24,6 +25,7 @@ export function PlanPanel(p: Props) {
   const [importText, setImportText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const pct = p.pointsTotal ? (p.pointsUsed / p.pointsTotal) * 100 : 0
   const over = p.pointsUsed > p.pointsTotal
@@ -31,9 +33,7 @@ export function PlanPanel(p: Props) {
   const doImport = () => {
     setError(null)
     try {
-      const { nodes, variants } = decode(importText)
-      if (!nodes.length) throw new Error('That link has no allocated nodes.')
-      p.onImport({ allocated: new Set(nodes), variants })
+      p.onImport(importText)
       setImportText('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that link.')
@@ -41,6 +41,7 @@ export function PlanPanel(p: Props) {
   }
 
   const doCopy = async () => {
+    setError(null)
     try {
       await navigator.clipboard.writeText(encodeUrl({
         nodes: [...p.plan.allocated],
@@ -57,16 +58,27 @@ export function PlanPanel(p: Props) {
     <>
       <div className={'points' + (over ? ' over' : '')}>
         <div className="points-bar"><div style={{ width: `${Math.min(100, pct)}%` }} /></div>
-        <div className="points-text">
-          <strong>{p.pointsUsed}</strong> / {p.pointsTotal} points
-        </div>
+        <div className="points-text"><strong>{p.pointsUsed}</strong> / {p.pointsTotal} points</div>
       </div>
 
       <div className="row">
         <button onClick={p.onUndo} disabled={!p.canUndo}>Undo</button>
         <button onClick={p.onRedo} disabled={!p.canRedo}>Redo</button>
-        <button onClick={p.onReset} disabled={p.pointsUsed === 0}>Reset</button>
+        {confirmReset ? (
+          <button
+            className="danger"
+            onClick={() => { p.onReset(); setConfirmReset(false) }}
+            onBlur={() => setConfirmReset(false)}
+            autoFocus
+          >
+            Clear {p.pointsUsed} points?
+          </button>
+        ) : (
+          <button onClick={() => setConfirmReset(true)} disabled={p.pointsUsed === 0}>Reset</button>
+        )}
       </div>
+
+      <div className="subhead">Saved plans</div>
 
       <div className="row">
         <input
@@ -74,13 +86,11 @@ export function PlanPanel(p: Props) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name this plan"
+          aria-label="Plan name"
           onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { p.onSave(name.trim()); setName('') } }}
         />
-        <button
-          onClick={() => { p.onSave(name.trim()); setName('') }}
-          disabled={!name.trim() || p.pointsUsed === 0}
-        >
-          Save
+        <button onClick={() => { p.onSave(name.trim()); setName('') }} disabled={!name.trim() || p.pointsUsed === 0}>
+          {p.saved.some((s) => s.name === name.trim()) ? 'Overwrite' : 'Save'}
         </button>
       </div>
 
@@ -89,7 +99,7 @@ export function PlanPanel(p: Props) {
           {p.saved.map((s) => (
             <li key={s.id}>
               <button className="saved-load" onClick={() => p.onLoad(s)}>{s.name}</button>
-              <button className="saved-del" onClick={() => p.onDelete(s.id)} title="Delete">x</button>
+              <button className="saved-del" onClick={() => p.onDelete(s.id)} aria-label={`Delete ${s.name}`}>×</button>
             </li>
           ))}
         </ul>
@@ -109,6 +119,7 @@ export function PlanPanel(p: Props) {
           value={importText}
           onChange={(e) => { setImportText(e.target.value); setError(null) }}
           placeholder="Paste an Atlas tree link"
+          aria-label="Atlas tree link to import"
           onKeyDown={(e) => { if (e.key === 'Enter') doImport() }}
           spellCheck={false}
         />
@@ -116,9 +127,7 @@ export function PlanPanel(p: Props) {
       </div>
 
       {error && <p className="error">{error}</p>}
-      <p className="hint">
-        Links work both ways with pathofexile.com and other planners.
-      </p>
+      <p className="hint">Links work both ways with pathofexile.com and other planners.</p>
     </>
   )
 }

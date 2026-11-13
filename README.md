@@ -5,9 +5,11 @@ A fast, lightweight Atlas passive tree planner for **Path of Exile 3.30**.
 **→ [zanthiagg.github.io/AtlasPlanner](https://zanthiagg.github.io/AtlasPlanner/)**
 
 - **Click anywhere to allocate** — it routes there for you, and shows the cost before you commit.
-- **Filter by mechanic** — pick Breach, Essence, Ritual (or several) and everything else dims. Each chip shows how many of that mechanic's nodes you already own.
-- **Browse the full modifier list** — the Nodes panel lists every modifier in your selection with a `taken / total` count, so picking Strongboxes tells you exactly what the mechanic offers and what you still have. Identical passives are grouped, and `+` allocates the nearest copy.
+- **The whole modifier list, always** — the sidebar lists every modifier in view with a `taken / total` count and the points to reach the nearest copy. Identical passives are grouped (966 nodes are only 371 distinct modifiers), and `+` allocates the nearest one.
+- **Filter by mechanic** — open Mechanics, type to find one, and click as many as you like; the picker stays open and the list narrows live. Selected mechanics show as chips you can remove.
+- **Tree summary** — one click shows what your tree actually *does*, with repeated modifiers added up: `177% increased Threads found in your Maps ×53`.
 - **Search by name or stat** — `pack size`, `ritual tribute`, `quantity`. Matching options on "select a type of content" notables count too.
+- **Choose options on choice notables**, so exported links carry them into the game.
 - **Share anywhere** — import and export real `pathofexile.com` Atlas tree links, so plans move between this, the official site and other planners. The page URL always holds your current plan.
 - **Save plans locally** and switch between them.
 

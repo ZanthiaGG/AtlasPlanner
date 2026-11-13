@@ -24,58 +24,86 @@ export type MechanicId =
 export interface Mechanic {
   id: MechanicId
   label: string
-  /** Chip + node-highlight colour. Chosen to stay legible on the dark graphite bg. */
-  color: string
 }
 
 /** Display order: alphabetical by label, with the catch-all last. */
 export const MECHANICS: Mechanic[] = [
-  { id: 'abyss', label: 'Abyss', color: '#8b7fd0' },
-  { id: 'anomalies', label: 'Atlas Anomalies', color: '#7fd4c1' },
-  { id: 'memories', label: 'Atlas Memories', color: '#b9a7e0' },
-  { id: 'bestiary', label: 'Bestiary', color: '#d4875f' },
-  { id: 'betrayal', label: 'Betrayal', color: '#9aa7b8' },
-  { id: 'beyond', label: 'Beyond', color: '#c0527a' },
-  { id: 'blight', label: 'Blight', color: '#9fc84a' },
-  { id: 'breach', label: 'Breach', color: '#c062d8' },
-  { id: 'conquerors', label: 'Conquerors', color: '#d2b48c' },
-  { id: 'delirium', label: 'Delirium', color: '#cfd6e0' },
-  { id: 'divination', label: 'Divination Cards', color: '#6fb8d6' },
-  { id: 'essence', label: 'Essence', color: '#64d0e8' },
-  { id: 'expedition', label: 'Expedition', color: '#d8c35a' },
-  { id: 'gateways', label: 'Gateways', color: '#ff9f68' },
-  { id: 'general', label: 'General', color: '#8d97a8' },
-  { id: 'gold', label: 'Gold', color: '#e8c25a' },
-  { id: 'harvest', label: 'Harvest', color: '#6ed08a' },
-  { id: 'incursion', label: 'Incursion', color: '#5ac8a8' },
-  { id: 'labyrinth', label: 'Labyrinth', color: '#c8b06a' },
-  { id: 'legion', label: 'Legion', color: '#d9b36c' },
-  { id: 'magicMonsters', label: 'Magic Monsters', color: '#6f8fe8' },
-  { id: 'mapDrops', label: 'Map Drops', color: '#7f9ad0' },
-  { id: 'mapMods', label: 'Map Modifiers', color: '#a0b0c4' },
-  { id: 'maven', label: 'The Maven', color: '#8ad6e8' },
-  { id: 'mercenaries', label: 'Mercenaries', color: '#e07f6a' },
-  { id: 'mirage', label: 'Mirage', color: '#a8c8e8' },
-  { id: 'packSize', label: 'Pack Size & Rarity', color: '#e8d08a' },
-  { id: 'rareMonsters', label: 'Rare Monsters', color: '#f5f07a' },
-  { id: 'ritual', label: 'Ritual', color: '#e05a5a' },
-  { id: 'rogueExiles', label: 'Rogue Exiles', color: '#d86a9a' },
-  { id: 'sentinel', label: 'Sentinel', color: '#7ad8c8' },
-  { id: 'settlers', label: 'Settlers of Kalguur', color: '#c89a5a' },
-  { id: 'elderShaper', label: 'Shaper & Elder', color: '#b0c8e0' },
-  { id: 'shrines', label: 'Shrines', color: '#8ad0f0' },
-  { id: 'strongbox', label: 'Strongboxes', color: '#c8a070' },
-  { id: 'synthesis', label: 'Synthesis', color: '#9ad0e8' },
-  { id: 'eater', label: 'The Eater of Worlds', color: '#9f6ad8' },
-  { id: 'exarch', label: 'The Searing Exarch', color: '#e8824a' },
-  { id: 'threads', label: 'Threads', color: '#4db5ff' },
-  { id: 'torment', label: 'Torment', color: '#a87ad8' },
-  { id: 'ultimatum', label: 'Ultimatum', color: '#d8a84a' },
-  { id: 'uniqueMonsters', label: 'Unique Monsters', color: '#c8733a' },
-  { id: 'azmeri', label: 'Viridian Wildwood', color: '#7fd06a' },
+  { id: 'abyss', label: 'Abyss' },
+  { id: 'anomalies', label: 'Atlas Anomalies' },
+  { id: 'memories', label: 'Atlas Memories' },
+  { id: 'bestiary', label: 'Bestiary' },
+  { id: 'betrayal', label: 'Betrayal' },
+  { id: 'beyond', label: 'Beyond' },
+  { id: 'blight', label: 'Blight' },
+  { id: 'breach', label: 'Breach' },
+  { id: 'conquerors', label: 'Conquerors' },
+  { id: 'delirium', label: 'Delirium' },
+  { id: 'divination', label: 'Divination Cards' },
+  { id: 'essence', label: 'Essence' },
+  { id: 'expedition', label: 'Expedition' },
+  { id: 'gateways', label: 'Gateways' },
+  { id: 'general', label: 'General' },
+  { id: 'gold', label: 'Gold' },
+  { id: 'harvest', label: 'Harvest' },
+  { id: 'incursion', label: 'Incursion' },
+  { id: 'labyrinth', label: 'Labyrinth' },
+  { id: 'legion', label: 'Legion' },
+  { id: 'magicMonsters', label: 'Magic Monsters' },
+  { id: 'mapDrops', label: 'Map Drops' },
+  { id: 'mapMods', label: 'Map Modifiers' },
+  { id: 'maven', label: 'The Maven' },
+  { id: 'mercenaries', label: 'Mercenaries' },
+  { id: 'mirage', label: 'Mirage' },
+  { id: 'packSize', label: 'Pack Size & Rarity' },
+  { id: 'rareMonsters', label: 'Rare Monsters' },
+  { id: 'ritual', label: 'Ritual' },
+  { id: 'rogueExiles', label: 'Rogue Exiles' },
+  { id: 'sentinel', label: 'Sentinel' },
+  { id: 'settlers', label: 'Settlers of Kalguur' },
+  { id: 'elderShaper', label: 'Shaper & Elder' },
+  { id: 'shrines', label: 'Shrines' },
+  { id: 'strongbox', label: 'Strongboxes' },
+  { id: 'synthesis', label: 'Synthesis' },
+  { id: 'eater', label: 'The Eater of Worlds' },
+  { id: 'exarch', label: 'The Searing Exarch' },
+  { id: 'threads', label: 'Threads' },
+  { id: 'torment', label: 'Torment' },
+  { id: 'ultimatum', label: 'Ultimatum' },
+  { id: 'uniqueMonsters', label: 'Unique Monsters' },
+  { id: 'azmeri', label: 'Viridian Wildwood' },
 ]
 
 export const MECHANIC_BY_ID = new Map(MECHANICS.map((m) => [m.id, m]))
+
+/**
+ * Colour is assigned on selection, not owned by the mechanic.
+ *
+ * Giving all 43 mechanics a fixed hue produced 46 pairs closer than deltaE 14 —
+ * Atlas Anomalies and Sentinel were deltaE 2.9 apart, which is to say the same
+ * colour. No palette separates 43 categories. Since you only ever have a handful
+ * selected at once, the colours that need to be distinguishable are only ever a
+ * handful, so they come from this short, well-separated list in selection order.
+ * Everything unselected stays neutral, which also means colour on screen always
+ * carries meaning rather than decorating.
+ */
+export const SELECTION_PALETTE = [
+  '#4db5ff', // blue
+  '#ffb84d', // amber
+  '#7fd06a', // green
+  '#ff6ad5', // magenta
+  '#5ce0c8', // teal
+  '#c58cff', // violet
+  '#ff7a5c', // coral
+  '#e8e04d', // yellow
+] as const
+
+export const NEUTRAL_MECHANIC_COLOR = '#6b7585'
+
+/** The colour a mechanic should be drawn in, given the current selection order. */
+export function mechanicColor(id: MechanicId, selected: readonly MechanicId[]): string {
+  const i = selected.indexOf(id)
+  return i < 0 ? NEUTRAL_MECHANIC_COLOR : SELECTION_PALETTE[i % SELECTION_PALETTE.length]!
+}
 
 /**
  * Icon base (filename minus directory, trailing digits and `.png`) -> mechanic.

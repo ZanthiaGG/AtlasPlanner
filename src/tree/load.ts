@@ -31,11 +31,9 @@ export function indexTree(data: CompactTree): Tree {
     for (const o of n.o) { link(n.i, o); link(o, n.i) }
   }
 
-  const allocatable: Tree['allocatable'] = []
   const countsByMechanic = new Map<MechanicId, number>()
   for (const n of data.nodes) {
     if (n.k === Kind.Mastery || n.i === data.start) continue
-    allocatable.push(n)
     countsByMechanic.set(n.m, (countsByMechanic.get(n.m) ?? 0) + 1)
   }
 
@@ -58,5 +56,5 @@ export function indexTree(data: CompactTree): Tree {
     }
   }
 
-  return { ...data, byId, adj, allocatable, countsByMechanic, edges }
+  return { ...data, byId, adj, countsByMechanic, edges }
 }
