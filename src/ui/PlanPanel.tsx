@@ -54,9 +54,7 @@ export function PlanPanel(p: Props) {
   }
 
   return (
-    <section className="panel">
-      <header className="panel-head"><h2>Plan</h2></header>
-
+    <>
       <div className={'points' + (over ? ' over' : '')}>
         <div className="points-bar"><div style={{ width: `${Math.min(100, pct)}%` }} /></div>
         <div className="points-text">
@@ -97,7 +95,7 @@ export function PlanPanel(p: Props) {
         </ul>
       )}
 
-      <header className="panel-head sub"><h2>Share</h2></header>
+      <div className="subhead">Share</div>
 
       <div className="row">
         <button className="grow primary" onClick={doCopy} disabled={p.pointsUsed === 0}>
@@ -121,6 +119,6 @@ export function PlanPanel(p: Props) {
       <p className="hint">
         Links work both ways with pathofexile.com and other planners.
       </p>
-    </section>
+    </>
   )
 }

@@ -15,8 +15,13 @@ import { NodeTooltip } from './ui/NodeTooltip.tsx'
 import { MechanicFilter } from './ui/MechanicFilter.tsx'
 import { SearchPanel } from './ui/SearchPanel.tsx'
 import { PlanPanel } from './ui/PlanPanel.tsx'
+import { Panel } from './ui/Panel.tsx'
+import { NodeList } from './ui/NodeList.tsx'
+import { Kind } from './tree/types.ts'
 
 const EMPTY_SET: ReadonlySet<number> = new Set()
+
+type PanelId = 'search' | 'mechanics' | 'nodes' | 'plan'
 
 export function App() {
   const [tree, setTree] = useState<Tree | null>(null)
@@ -29,6 +34,15 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [saved, setSaved] = useState<SavedPlan[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [open, setOpen] = useState<ReadonlySet<PanelId>>(new Set<PanelId>(['search', 'mechanics']))
+
+  const togglePanel = useCallback((id: PanelId) => {
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
 
   const canvas = useRef<TreeCanvasHandle | null>(null)
   const handleRef = useCallback((h: TreeCanvasHandle) => { canvas.current = h }, [])
@@ -76,6 +90,27 @@ export function App() {
     return route ? route.length : null
   }, [hover, plan])
 
+  /**
+   * What the Nodes panel lists: the mechanic selection narrowed by the search
+   * box. With neither active it stays empty rather than dumping all 1116 nodes.
+   */
+  const pool = useMemo(() => {
+    if (!tree) return []
+    const hasMechanics = mechanics.size > 0
+    const hasQuery = query.trim().length > 0
+    if (!hasMechanics && !hasQuery) return []
+    return tree.nodes.filter((n) =>
+      n.k !== Kind.Mastery &&
+      (!hasMechanics || mechanics.has(n.m)) &&
+      (!hasQuery || results.ids.has(n.i)),
+    )
+  }, [tree, mechanics, query, results.ids])
+
+  const costOf = useCallback((id: number) => {
+    const route = plan.routeTo(id)
+    return route ? route.length : null
+  }, [plan])
+
   const renderState = useMemo(() => ({
     allocated: plan.plan.allocated,
     frontier: plan.frontier,
@@ -119,6 +154,13 @@ export function App() {
     setMechanics((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
+      // Picking a mechanic means you want its modifier list, not more chips —
+      // so hand the sidebar over to the node list and fold the chips away.
+      setOpen((panels) => {
+        const p = new Set(panels)
+        if (next.size > 0) { p.add('nodes'); p.delete('mechanics') }
+        return p
+      })
       return next
     })
   }, [])
@@ -177,37 +219,78 @@ export function App() {
           <span className="version">{tree.version}</span>
         </div>
 
-        <SearchPanel
-          query={query}
-          onQuery={setQuery}
-          hits={results.hits}
-          allocated={plan.plan.allocated}
-          onFocus={focusNode}
-        />
+        <Panel
+          title="Search"
+          open={open.has('search')}
+          onToggle={() => togglePanel('search')}
+          badge={query ? `${results.hits.length}` : undefined}
+        >
+          <SearchPanel
+            query={query}
+            onQuery={setQuery}
+            hits={results.hits}
+            allocated={plan.plan.allocated}
+            onFocus={focusNode}
+          />
+        </Panel>
 
-        <MechanicFilter
-          tree={tree}
-          allocated={plan.plan.allocated}
-          active={mechanics}
-          onToggle={toggleMechanic}
-          onClear={() => setMechanics(new Set())}
-        />
+        <Panel
+          title="Mechanics"
+          open={open.has('mechanics')}
+          onToggle={() => togglePanel('mechanics')}
+          badge={mechanics.size ? `${mechanics.size} selected` : undefined}
+          action={mechanics.size > 0
+            ? <button className="link" onClick={() => setMechanics(new Set())}>clear</button>
+            : undefined}
+        >
+          <MechanicFilter
+            tree={tree}
+            allocated={plan.plan.allocated}
+            active={mechanics}
+            onToggle={toggleMechanic}
+          />
+        </Panel>
 
-        <PlanPanel
-          plan={plan.plan}
-          pointsUsed={plan.pointsUsed}
-          pointsTotal={plan.pointsTotal}
-          canUndo={plan.canUndo}
-          canRedo={plan.canRedo}
-          onUndo={plan.undo}
-          onRedo={plan.redo}
-          onReset={plan.reset}
-          onImport={importPlan}
-          saved={saved}
-          onSave={(name) => { setSaved(savePlan(saved, name, plan.plan)); flash(`Saved "${name}".`) }}
-          onLoad={(s) => importPlan(planFromSaved(s))}
-          onDelete={(id) => setSaved(deletePlan(saved, id))}
-        />
+        <Panel
+          title="Nodes"
+          open={open.has('nodes')}
+          onToggle={() => togglePanel('nodes')}
+          badge={pool.length ? `${pool.length}` : undefined}
+          grow
+        >
+          <NodeList
+            pool={pool}
+            allocated={plan.plan.allocated}
+            costOf={costOf}
+            onFocus={focusNode}
+            onAllocate={(n) => onPick(n, 'allocate')}
+            onDeallocate={(n) => plan.deallocate(n.i)}
+            emptyHint="Pick a mechanic above, or search, to list every modifier it offers and how many you have taken."
+          />
+        </Panel>
+
+        <Panel
+          title="Plan"
+          open={open.has('plan')}
+          onToggle={() => togglePanel('plan')}
+          badge={`${plan.pointsUsed}/${plan.pointsTotal}`}
+        >
+          <PlanPanel
+            plan={plan.plan}
+            pointsUsed={plan.pointsUsed}
+            pointsTotal={plan.pointsTotal}
+            canUndo={plan.canUndo}
+            canRedo={plan.canRedo}
+            onUndo={plan.undo}
+            onRedo={plan.redo}
+            onReset={plan.reset}
+            onImport={importPlan}
+            saved={saved}
+            onSave={(name) => { setSaved(savePlan(saved, name, plan.plan)); flash(`Saved "${name}".`) }}
+            onLoad={(s) => importPlan(planFromSaved(s))}
+            onDelete={(id) => setSaved(deletePlan(saved, id))}
+          />
+        </Panel>
 
         <footer className="credits">
           <p>

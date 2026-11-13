@@ -119,6 +119,21 @@ export function draw(
       ctx.drawImage(bg.img, c.x, c.y, c.w, c.h,
         sx(bMinX), sy(bMinY), (bMaxX - bMinX) * cam.scale, (bMaxY - bMinY) * cam.scale)
       ctx.globalAlpha = 1
+
+      // The backdrop is a rectangle and the tree is round, so its straight
+      // edges cut a visible seam against the page colour. Fade it out radially
+      // instead of trying to match that colour exactly — the artwork's edge is
+      // not a flat tone, so no single background colour would ever line up.
+      const mx = sx((bMinX + bMaxX) / 2)
+      const my = sy((bMinY + bMaxY) / 2)
+      const outer = (Math.max(bMaxX - bMinX, bMaxY - bMinY) / 2) * cam.scale
+      const fade = ctx.createRadialGradient(mx, my, outer * 0.52, mx, my, outer * 0.99)
+      fade.addColorStop(0, 'rgba(13, 15, 19, 0)')
+      fade.addColorStop(1, COLORS.bg)
+      ctx.fillStyle = fade
+      // A radial gradient clamps to its last stop beyond the outer radius, so
+      // one fill covers both the fade and everything outside it.
+      ctx.fillRect(0, 0, vp.w, vp.h)
     }
   }
 
@@ -210,15 +225,29 @@ export function draw(
   }
   visible.sort((a, b) => a.k - b.k)
 
-  const blit = (key: SheetKey, coordKey: string, cx: number, cy: number, boost = 1) => {
+  /**
+   * `clip` masks the sprite to a circle inscribed in its cell. GGG's icon cells
+   * are fully opaque squares — the client is expected to round them off — so
+   * without this every node shows square corners poking out of its round frame.
+   */
+  const blit = (key: SheetKey, coordKey: string, cx: number, cy: number, clip = false) => {
     const s = sprites.sheet(key, level)
     if (!s) return false
     const c = s.sheet.coords[coordKey]
     if (!c) return false
     const lv = tree.zoomLevels[s.level]!
-    const w = (c.w / lv) * cam.scale * boost
-    const h = (c.h / lv) * cam.scale * boost
-    ctx.drawImage(s.img, c.x, c.y, c.w, c.h, cx - w / 2, cy - h / 2, w, h)
+    const w = (c.w / lv) * cam.scale
+    const h = (c.h / lv) * cam.scale
+    if (clip) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(cx, cy, Math.min(w, h) / 2, 0, Math.PI * 2)
+      ctx.clip()
+      ctx.drawImage(s.img, c.x, c.y, c.w, c.h, cx - w / 2, cy - h / 2, w, h)
+      ctx.restore()
+    } else {
+      ctx.drawImage(s.img, c.x, c.y, c.w, c.h, cx - w / 2, cy - h / 2, w, h)
+    }
     return true
   }
 
@@ -234,14 +263,14 @@ export function draw(
     // Masteries are orientation landmarks, not targets — keep them subtle.
     if (n.k === Kind.Mastery) {
       ctx.globalAlpha *= 0.75
-      blit('mastery', n.ic, px, py)
+      blit('mastery', n.ic, px, py, true)
       ctx.globalAlpha = 1
       continue
     }
 
     const fk = frameKey(n.k, allocated || inPreview, canAllocate)
     if (fk) blit('frame', fk, px, py)
-    blit(iconSheet(n.k, allocated || inPreview), iconKey(n), px, py)
+    blit(iconSheet(n.k, allocated || inPreview), iconKey(n), px, py, true)
 
     // Search hits get a ring in the mechanic-neutral magenta so they read
     // against both the blue allocated state and the gold preview.

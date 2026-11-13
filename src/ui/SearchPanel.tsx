@@ -20,9 +20,7 @@ export function SearchPanel({ query, onQuery, hits, allocated, onFocus }: Props)
   const taken = hits.filter((n) => allocated.has(n.i)).length
 
   return (
-    <section className="panel">
-      <header className="panel-head"><h2>Search</h2></header>
-
+    <>
       <input
         className="search"
         value={query}
@@ -36,13 +34,13 @@ export function SearchPanel({ query, onQuery, hits, allocated, onFocus }: Props)
         <p className="hint">
           {hits.length === 0
             ? 'No matching nodes.'
-            : `${hits.length} match${hits.length === 1 ? '' : 'es'} — ${taken} allocated, ${hits.length - taken} not.`}
+            : `${hits.length} match${hits.length === 1 ? '' : 'es'} — ${taken} allocated, ${hits.length - taken} not. Full list below.`}
         </p>
       )}
 
       {hits.length > 0 && (
         <ul className="results">
-          {hits.slice(0, 60).map((n) => {
+          {hits.slice(0, 40).map((n) => {
             const m = MECHANIC_BY_ID.get(n.m)
             return (
               <li key={n.i}>
@@ -58,9 +56,9 @@ export function SearchPanel({ query, onQuery, hits, allocated, onFocus }: Props)
               </li>
             )
           })}
-          {hits.length > 60 && <li className="more">+{hits.length - 60} more — narrow the search</li>}
+          {hits.length > 40 && <li className="more">+{hits.length - 40} more — see the Nodes panel</li>}
         </ul>
       )}
-    </section>
+    </>
   )
 }

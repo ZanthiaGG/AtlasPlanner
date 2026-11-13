@@ -9,7 +9,6 @@ interface Props {
   allocated: ReadonlySet<number>
   active: ReadonlySet<MechanicId>
   onToggle: (id: MechanicId) => void
-  onClear: () => void
 }
 
 /**
@@ -19,7 +18,7 @@ interface Props {
  * progress readout: pick Breach and you can see at a glance how much of the
  * Breach tree you already own.
  */
-export function MechanicFilter({ tree, allocated, active, onToggle, onClear }: Props) {
+export function MechanicFilter({ tree, allocated, active, onToggle }: Props) {
   const taken = useMemo(() => {
     const counts = new Map<MechanicId, number>()
     for (const id of allocated) {
@@ -31,17 +30,10 @@ export function MechanicFilter({ tree, allocated, active, onToggle, onClear }: P
   }, [tree, allocated])
 
   return (
-    <section className="panel">
-      <header className="panel-head">
-        <h2>Mechanics</h2>
-        {active.size > 0 && (
-          <button className="link" onClick={onClear}>clear</button>
-        )}
-      </header>
-
+    <>
       <p className="hint">
         {active.size === 0
-          ? 'Pick one or more to highlight their nodes and dim everything else.'
+          ? 'Pick one or more to highlight their nodes and list every modifier they offer.'
           : `${active.size} selected — everything else is dimmed.`}
       </p>
 
@@ -66,6 +58,6 @@ export function MechanicFilter({ tree, allocated, active, onToggle, onClear }: P
           )
         })}
       </div>
-    </section>
+    </>
   )
 }

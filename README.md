@@ -6,6 +6,7 @@ A fast, lightweight Atlas passive tree planner for **Path of Exile 3.30**.
 
 - **Click anywhere to allocate** — it routes there for you, and shows the cost before you commit.
 - **Filter by mechanic** — pick Breach, Essence, Ritual (or several) and everything else dims. Each chip shows how many of that mechanic's nodes you already own.
+- **Browse the full modifier list** — the Nodes panel lists every modifier in your selection with a `taken / total` count, so picking Strongboxes tells you exactly what the mechanic offers and what you still have. Identical passives are grouped, and `+` allocates the nearest copy.
 - **Search by name or stat** — `pack size`, `ritual tribute`, `quantity`. Matching options on "select a type of content" notables count too.
 - **Share anywhere** — import and export real `pathofexile.com` Atlas tree links, so plans move between this, the official site and other planners. The page URL always holds your current plan.
 - **Save plans locally** and switch between them.
