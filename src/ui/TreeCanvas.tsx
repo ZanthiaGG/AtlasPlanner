@@ -163,29 +163,42 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 && e.button !== 2) return
-    ;(e.target as Element).setPointerCapture?.(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (pointers.current.size === 2) {
-      const [a, b] = [...pointers.current.values()]
-      pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y) }
+    if (pointers.current.size >= 2) {
+      // Capture is for dragging one pointer. Holding it while a second finger
+      // arrives can swallow that finger's events, which would silently turn a
+      // pinch back into a one-finger pan.
+      for (const id of pointers.current.keys()) {
+        try { (e.currentTarget as Element).releasePointerCapture(id) } catch { /* not captured */ }
+      }
       drag.current.id = -1 // a second finger ends any tap in progress
     } else {
+      try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch { /* fine without it */ }
       drag.current = { moved: false, x: e.clientX, y: e.clientY, id: e.pointerId }
     }
   }, [])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
+    // A move for a pointer we never saw go down means its pointerdown was lost
+    // — the touch began outside the canvas, or capture swallowed it. Adopt it,
+    // so a two-finger gesture still works instead of degrading to a pan.
     const tracked = pointers.current.get(e.pointerId)
     if (tracked) { tracked.x = e.clientX; tracked.y = e.clientY }
+    else if (e.pointerType !== 'mouse' || e.buttons !== 0) {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (pointers.current.size >= 2) drag.current.id = -1
+    }
 
     // Two fingers: scale about the midpoint. Without this, touch devices have
     // no way to zoom at all — `touch-action: none` also blocks the native pinch.
-    if (pointers.current.size === 2 && pinch.current) {
+    if (pointers.current.size >= 2) {
       const canvas = canvasRef.current
       if (!canvas) return
       const [a, b] = [...pointers.current.values()]
       const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y)
-      if (dist > 0 && pinch.current.dist > 0) {
+      // Seed the baseline on the first two-pointer move rather than relying on
+      // pointerdown having run for both.
+      if (pinch.current && pinch.current.dist > 0 && dist > 0) {
         const rect = canvas.getBoundingClientRect()
         const mx = (a!.x + b!.x) / 2 - rect.left
         const my = (a!.y + b!.y) / 2 - rect.top
@@ -193,7 +206,7 @@ export function TreeCanvas({ tree, state, onHover, onPick, handleRef }: Props) {
         camRef.current.zoomAt(dist / pinch.current.dist, mx, my, vpRef.current)
         invalidate()
       }
-      pinch.current.dist = dist
+      pinch.current = { dist }
       onHover(null, 0, 0)
       return
     }
