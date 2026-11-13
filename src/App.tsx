@@ -238,6 +238,13 @@ export function App() {
           handleRef={handleRef}
         />
 
+        {/* The points budget is the number you check constantly, so it lives on
+            the canvas rather than in the sidebar where it can scroll away. */}
+        <div className={'hud' + (plan.pointsUsed > plan.pointsTotal ? ' over' : '')}>
+          <strong>{plan.pointsUsed}</strong>
+          <span>/ {plan.pointsTotal} points</span>
+        </div>
+
         <div className="view-actions">
           <button onClick={() => canvas.current?.fitAll()}>Whole atlas</button>
           <button
