@@ -92,15 +92,20 @@ export function App() {
 
   /**
    * What the Nodes panel lists: the mechanic selection narrowed by the search
-   * box. With neither active it stays empty rather than dumping all 1116 nodes.
+   * box. With neither active it lists the whole tree — 967 listable nodes, but
+   * only 372 distinct modifiers once identical copies are grouped, so it stays
+   * a browsable catalogue rather than a dump.
    */
   const pool = useMemo(() => {
     if (!tree) return []
     const hasMechanics = mechanics.size > 0
     const hasQuery = query.trim().length > 0
-    if (!hasMechanics && !hasQuery) return []
+    // Masteries are not allocatable, and the start node has no name or stats —
+    // it would list as a blank row.
+    const listable = (n: CompactNode) => n.k !== Kind.Mastery && n.i !== tree.start
+    if (!hasMechanics && !hasQuery) return tree.nodes.filter(listable)
     return tree.nodes.filter((n) =>
-      n.k !== Kind.Mastery &&
+      listable(n) &&
       (!hasMechanics || mechanics.has(n.m)) &&
       (!hasQuery || results.ids.has(n.i)),
     )
@@ -265,7 +270,7 @@ export function App() {
             onFocus={focusNode}
             onAllocate={(n) => onPick(n, 'allocate')}
             onDeallocate={(n) => plan.deallocate(n.i)}
-            emptyHint="Pick a mechanic above, or search, to list every modifier it offers and how many you have taken."
+            emptyHint="No nodes match the current mechanic and search combination."
           />
         </Panel>
 

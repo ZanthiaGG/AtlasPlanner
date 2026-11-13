@@ -127,8 +127,11 @@ main {
   flex: none;
   min-height: 0;
 }
-/* The node list is the one panel worth giving the leftover height to. */
-.panel.grow { flex: 1 1 auto; }
+/* The node list is the one panel worth giving the leftover height to. The
+   min-height matters: without it the panel shrinks past its content when every
+   section is expanded, and because panel contents are `overflow: visible` they
+   spill over the next section's header instead of making the sidebar scroll. */
+.panel.grow { flex: 1 1 auto; min-height: 300px; }
 
 .panel-head {
   display: flex;
